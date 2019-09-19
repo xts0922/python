@@ -1,63 +1,80 @@
 import requests
 
+import os
 import  json
-import  MySQLdb
-import  os
+import time
+import  re
+import datetime
 
-import lxml
-def get_professional_id(school_url):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (compatible;Baiduspider-render/2.0; +http://www.baidu.com/search/spider.html)'
-    }
-    res = requests.get(school_url,headers=headers).text
-    res = json.loads(res)
-    res_list = res["special_detail"]["1"]
-    if res_list:
-        id_list =  [i["id"] for i in res_list]
-    else:
-        res_list = res["special_detail"]["2"]
-        id_list = [i["id"] for i in res_list]
-    return id_list
+import MySQLdb
+url = r"D:\xiatian\static-data.eol.cn\static-data.eol.cn\www\school\30\special\2019\1.json"
 
 
-def select_db():
-    conn = MySQLdb.connect(host='192.168.0.129', user='root', passwd='123456', db='take_data', charset='utf8')
-    cur = conn.cursor()
-    cur.execute("select college_id from eol_college group by college_id")
-    id_list = cur.fetchall()
-    return  id_list
-def sava_file(res,sava_dir):
+def run(url):
+    pattern = re.compile(r'<[^>]+>',re.S)
+    # 获得当前时间
+    now = datetime.datetime.now()  # 这是时间数组格式
 
-        with open(sava_dir, 'wb') as f:
-            f.write(res)
+    # 转换为指定的格式:
+    otherStyleTime = now.strftime("%Y-%m-%d %H:%M:%S")
+    with open(url, encoding='utf-8') as file_obj:
+        contents = json.load(file_obj)
 
-school_list = select_db()
-# url_list = ("https://static-data.eol.cn/www/school/{}/pc_special.json".format(i[0]) for i in school_list)
-#
-# pre_school_url = ("https://static-data.eol.cn/www/school/{}/special/2019/".format(i[0]) for i in school_list)
-# https://static-data.eol.cn/www/school/38/special/2019/650.json
+        college_id = contents["school_id"]
+        # specials_id = contents["special_id"]
+        spe_name = contents["name"]
+        spe_code = contents["id"]
+        spe_type = 1 if contents["level1_name"] == "本科" else 2
 
-for school_id in school_list:
-    school_url = "https://static-data.eol.cn/www/school/{}/pc_special.json".format(school_id[0])
-    print(school_url)
+        content = contents["content"]
+        try:
+            spe_content = pattern.sub('', content)
+        except:
+            spe_content = " "
+        created_at = otherStyleTime
+        update_at = otherStyleTime
+
+        sql = "insert into dd_college_specials(college_id,spe_name,spe_code,spe_type,spe_content,created_at,update_at) values ('%s','%s','%s','%s','%s','%s','%s')" % (college_id,spe_name,spe_code,spe_type,spe_content,created_at,update_at)
+        return sql
+def execute(sql):
+
+    # 打开数据库连接
+    db = MySQLdb.connect(host='192.168.0.129', user='root', passwd='123456', db='data_manage', charset='utf8')
+
+    # 使用cursor()方法获取操作游标
+    cursor = db.cursor()
+
 
     try:
-        id_list = get_professional_id(school_url)
+        # 执行sql语句
+        cursor.execute(sql)
+        # 提交到数据库执行
+        db.commit()
     except:
-        continue
+        # Rollback in case there is any error
+        db.rollback()
 
-    print(id_list)
-    for id in id_list:
-        json_url = "https://static-data.eol.cn/www/school/{}/special/2019/{}.json".format(school_id[0],id)
-        sava_url = "D:/xiatian/static-data.eol.cn/static-data.eol.cn/www/school/{}/special/2019/{}.json".format(school_id[0],id)
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (compatible;Baiduspider-render/2.0; +http://www.baidu.com/search/spider.html)'
-        }
-        if os.path.exists(sava_url) is False:
-            res =  requests.get(json_url,headers=headers).content
-            sava_file(res,sava_url)
-            print(json_url + "已入库")
+    # 关闭数据库连接
+    db.close()
 
 
+if __name__ == '__main__':
+    # for i in range(20,)
+    # url = r"D:\xiatian\static-data.eol.cn\static-data.eol.cn\www\school\{}\special\2019\{}.json"
+    # url = url.format(i)
+    #
+    # sql = run(url)
+    #
+    # execute(sql)
+    for i in range(30,3425):
+        url = r"D:\xiatian\static-data.eol.cn\static-data.eol.cn\www\school\{}\special\2019".format(i)
+        try:
+            dirs = os.listdir(url)
+        except:
+            continue
+        for file in dirs:
 
-
+            ffile =url+ '\\' +file
+            print(ffile)
+            sql = run(ffile)
+            execute(sql)
